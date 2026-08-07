@@ -309,6 +309,18 @@ body {
   border-color: var(--accent);
 }
 
+.download-tiers {
+  display: flex;
+  gap: 8px;
+  margin: -6px 0 12px;
+  flex-wrap: wrap;
+}
+
+.download-tiers .download-btn {
+  flex: 1;
+  text-align: center;
+}
+
 .preview-frame {
   position: relative;
   /* Headshots are generated square (LinkedIn crops profile photos square/circle). */
@@ -437,19 +449,24 @@ body {
   border-radius: 999px;
 }
 
-.gallery-item .gallery-download {
+.gallery-download-tiers {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gallery-item .gallery-download {
+  border: none;
+  border-radius: 5px;
   background: rgba(0,0,0,0.65);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  cursor: pointer;
   text-decoration: none;
 }
 

@@ -23,7 +23,7 @@ const els = {
   previewImage: document.getElementById('preview-image'),
   watermarkOverlay: document.getElementById('watermark-overlay'),
   previewLoading: document.getElementById('preview-loading'),
-  downloadBtn: document.getElementById('download-btn'),
+  downloadTiers: document.getElementById('download-tiers'),
   gallery: document.getElementById('gallery'),
   budgetPill: document.getElementById('budget-pill'),
   budgetText: document.getElementById('budget-text'),
@@ -154,7 +154,11 @@ function renderGallery(history) {
     item.innerHTML = `
       <img src="${entry.resultUrl}" alt="LinkedIn headshot" />
       <div class="watermark-overlay gallery-watermark">${watermarkMarkup()}</div>
-      <button class="gallery-download" data-image-id="${entry.id}" title="Pay $2.00 to download highres image">&#8681;</button>
+      <div class="gallery-download-tiers">
+        <button class="gallery-download" data-image-id="${entry.id}" data-tier="1k" title="Pay $2 for 1K">1K</button>
+        <button class="gallery-download" data-image-id="${entry.id}" data-tier="2k" title="Pay $4 for 2K">2K</button>
+        <button class="gallery-download" data-image-id="${entry.id}" data-tier="4k" title="Pay $5 for 4K">4K</button>
+      </div>
     `;
     els.gallery.appendChild(item);
   });
@@ -172,14 +176,14 @@ async function refreshHistory() {
 
 els.gallery.addEventListener('click', (e) => {
   const btn = e.target.closest('.gallery-download');
-  if (btn) startCheckout(btn.dataset.imageId);
+  if (btn) startCheckout(btn.dataset.imageId, btn.dataset.tier);
 });
 
 // ---------- paywall ----------
 
-function triggerDownload(imageId) {
+function triggerDownload(imageId, tier) {
   const a = document.createElement('a');
-  a.href = `/api/download/${imageId}`;
+  a.href = `/api/download/${imageId}/${tier}`;
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
@@ -197,28 +201,28 @@ async function restorePaidPreview(imageId) {
     els.previewImage.src = entry.resultUrl;
     els.previewImage.classList.remove('hidden');
     els.watermarkOverlay.classList.remove('hidden');
-    els.downloadBtn.classList.remove('hidden');
+    els.downloadTiers.classList.remove('hidden');
     state.currentImageId = entry.id;
   } catch (err) {
     // non-fatal: preview just won't be restored
   }
 }
 
-async function startCheckout(imageId) {
-  if (!imageId) return;
+async function startCheckout(imageId, tier) {
+  if (!imageId || !tier) return;
   showError('');
   try {
     const res = await fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageId }),
+      body: JSON.stringify({ imageId, tier }),
     });
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'Could not start checkout.');
     }
     if (data.alreadyPaid) {
-      triggerDownload(imageId);
+      triggerDownload(imageId, tier);
       return;
     }
     window.location.href = data.url;
@@ -230,19 +234,22 @@ async function startCheckout(imageId) {
 async function handlePaymentReturn() {
   const params = new URLSearchParams(window.location.search);
   const paidImage = params.get('paid_image');
+  const tier = params.get('tier');
   const sessionId = params.get('session_id');
-  if (!paidImage || !sessionId) return;
+  if (!paidImage || !tier || !sessionId) return;
 
   window.history.replaceState({}, '', window.location.pathname);
+  showError('Finalizing your high-res download…');
 
   try {
     const res = await fetch(`/api/verify-payment?session_id=${encodeURIComponent(sessionId)}`);
     const data = await res.json();
     if (res.ok && data.paid) {
+      showError('');
       await restorePaidPreview(paidImage);
-      triggerDownload(paidImage);
+      triggerDownload(paidImage, tier);
     } else {
-      showError('Payment could not be verified.');
+      showError(data.error || 'Payment could not be verified.');
     }
   } catch (err) {
     showError('Payment could not be verified.');
@@ -299,7 +306,7 @@ els.generateBtn.addEventListener('click', async () => {
     els.previewImage.classList.remove('hidden');
     els.watermarkOverlay.classList.remove('hidden');
     state.currentImageId = data.id;
-    els.downloadBtn.classList.remove('hidden');
+    els.downloadTiers.classList.remove('hidden');
     els.budgetText.textContent = `$${data.remainingTodayUsd.toFixed(2)} left of today's budget`;
     els.budgetPill.classList.toggle('low', data.remainingTodayUsd < data.costUsd);
 
@@ -309,13 +316,17 @@ els.generateBtn.addEventListener('click', async () => {
     if (els.previewImage.classList.contains('hidden')) {
       els.previewPlaceholder.classList.remove('hidden');
       els.watermarkOverlay.classList.add('hidden');
+      els.downloadTiers.classList.add('hidden');
     }
   } finally {
     setLoading(false);
   }
 });
 
-els.downloadBtn.addEventListener('click', () => startCheckout(state.currentImageId));
+els.downloadTiers.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-tier]');
+  if (btn) startCheckout(state.currentImageId, btn.dataset.tier);
+});
 
 // ---------- init ----------
 
