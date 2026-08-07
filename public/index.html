@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LinkedIn Headshot</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">&#9679;</span>
+        <div>
+          <h1>LinkedIn Headshot</h1>
+          <p>Turn a casual photo into a polished, professional headshot.</p>
+        </div>
+      </div>
+      <div class="budget" id="budget-pill" title="daily budget">
+        <span class="dot"></span>
+        <span id="budget-text">Loading budget…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls">
+        <div class="field-group">
+          <h2>Your photo</h2>
+          <p class="hint">1. Frontal face photo (minimum requirement)<br>2. A second angle (optional, helps accuracy)</p>
+          <div class="photo-slots" id="photo-slots">
+            <label class="photo-slot" data-index="0">
+              <input type="file" accept="image/*" class="photo-input" />
+              <span class="plus">+</span>
+              <span class="slot-label">Photo 1</span>
+            </label>
+            <label class="photo-slot" data-index="1">
+              <input type="file" accept="image/*" class="photo-input" />
+              <span class="plus">+</span>
+              <span class="slot-label">Photo 2</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <h2>Attire</h2>
+          <select id="attire" class="text-input">
+            <option value="suit">Dark business suit</option>
+            <option value="blazer" selected>Blazer, business professional</option>
+            <option value="shirt">Collared shirt, business casual</option>
+            <option value="knit">Smart knit / turtleneck</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <h2>Background</h2>
+          <select id="background" class="text-input">
+            <option value="studio_grey" selected>Studio &mdash; neutral grey</option>
+            <option value="studio_white">Studio &mdash; soft white</option>
+            <option value="office">Blurred modern office</option>
+            <option value="bookshelf">Blurred bookshelf</option>
+            <option value="outdoor">Blurred outdoor</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <h2>Framing</h2>
+          <select id="framing" class="text-input">
+            <option value="head_shoulders" selected>Head &amp; shoulders</option>
+            <option value="upper_body">Upper body</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <h2>Notes <span class="optional">optional</span></h2>
+          <textarea id="notes" class="text-input" rows="2" placeholder="e.g. keep my glasses, subtle smile, tidy beard"></textarea>
+        </div>
+
+        <button id="generate-btn" class="generate-btn">
+          <span id="generate-btn-text">Generate Headshot</span>
+        </button>
+        <p class="error-text" id="error-text"></p>
+      </section>
+
+      <section class="panel preview">
+        <div class="row-between">
+          <h2>Preview</h2>
+          <span class="hint">Takes approx 10-40 secs</span>
+          <button id="download-btn" class="download-btn hidden" type="button">&#8681; Pay $2.00 to Download Highres Image</button>
+        </div>
+        <div class="preview-frame" id="preview-frame">
+          <div class="preview-placeholder" id="preview-placeholder">
+            <span class="preview-icon">&#128100;</span>
+            <p>Your headshot will appear here</p>
+          </div>
+          <img id="preview-image" class="preview-image hidden" alt="Generated headshot" />
+          <div class="watermark-overlay hidden" id="watermark-overlay"></div>
+          <div class="preview-loading hidden" id="preview-loading">
+            <div class="spinner"></div>
+            <p>Styling your headshot…</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section class="gallery-section">
+      <div class="row-between">
+        <h2>Your headshots</h2>
+      </div>
+      <div class="gallery" id="gallery"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
