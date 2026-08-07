@@ -129,6 +129,14 @@ body {
   gap: 10px;
 }
 
+.photo-slots.single {
+  grid-template-columns: 1fr;
+}
+
+.photo-slots.single .photo-slot {
+  aspect-ratio: 16 / 9;
+}
+
 .photo-slot {
   position: relative;
   aspect-ratio: 1 / 1;

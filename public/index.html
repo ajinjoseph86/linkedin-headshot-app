@@ -42,6 +42,29 @@
         </div>
 
         <div class="field-group">
+          <h2>Style templates <span class="optional">optional</span></h2>
+          <p class="hint">Pick a preset to auto-fill attire, background, and framing below.</p>
+          <div class="presets" id="style-templates">
+            <button type="button" data-attire="suit" data-background="studio_grey" data-framing="head_shoulders">Corporate Classic</button>
+            <button type="button" data-attire="blazer" data-background="studio_white" data-framing="head_shoulders">Modern Professional</button>
+            <button type="button" data-attire="knit" data-background="office" data-framing="upper_body">Creative Founder</button>
+            <button type="button" data-attire="shirt" data-background="outdoor" data-framing="head_shoulders">Approachable Outdoor</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <h2>Style reference photo <span class="optional">optional</span></h2>
+          <p class="hint">Upload a sample headshot whose look you like &mdash; we'll match its clothing, background, and lighting (never its face).</p>
+          <div class="photo-slots single" id="style-reference-slot">
+            <label class="photo-slot" data-index="0">
+              <input type="file" accept="image/*" class="photo-input" />
+              <span class="plus">+</span>
+              <span class="slot-label">Style sample</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
           <h2>Attire</h2>
           <select id="attire" class="text-input">
             <option value="suit">Dark business suit</option>

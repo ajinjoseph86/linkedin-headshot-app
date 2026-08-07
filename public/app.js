@@ -4,11 +4,14 @@ const WATERMARK_TILES = 9;
 
 const state = {
   photos: [null, null], // File objects
+  styleReference: null, // File object
   currentImageId: null,
 };
 
 const els = {
-  slots: document.querySelectorAll('.photo-slot'),
+  slots: document.querySelectorAll('#photo-slots .photo-slot'),
+  styleReferenceSlot: document.querySelector('#style-reference-slot .photo-slot'),
+  styleTemplates: document.getElementById('style-templates'),
   attire: document.getElementById('attire'),
   background: document.getElementById('background'),
   framing: document.getElementById('framing'),
@@ -70,6 +73,56 @@ els.slots.forEach((slot) => {
     thumb.src = URL.createObjectURL(file);
     slot.classList.add('filled');
     updateGenerateEnabled();
+  });
+});
+
+// ---------- style reference slot ----------
+
+{
+  const slot = els.styleReferenceSlot;
+  const input = slot.querySelector('.photo-input');
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'remove-btn';
+  removeBtn.innerHTML = '&times;';
+  removeBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.styleReference = null;
+    input.value = '';
+    const thumb = slot.querySelector('img.thumb');
+    if (thumb) thumb.remove();
+    slot.classList.remove('filled');
+  });
+  slot.appendChild(removeBtn);
+
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    if (!file) return;
+    state.styleReference = file;
+
+    let thumb = slot.querySelector('img.thumb');
+    if (!thumb) {
+      thumb = document.createElement('img');
+      thumb.className = 'thumb';
+      slot.insertBefore(thumb, removeBtn);
+    }
+    thumb.src = URL.createObjectURL(file);
+    slot.classList.add('filled');
+  });
+}
+
+// ---------- style templates ----------
+
+els.styleTemplates.querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.attire.value = btn.dataset.attire;
+    els.background.value = btn.dataset.background;
+    els.framing.value = btn.dataset.framing;
+
+    els.styleTemplates.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
   });
 });
 
@@ -227,6 +280,9 @@ els.generateBtn.addEventListener('click', async () => {
   formData.append('background', els.background.value);
   formData.append('framing', els.framing.value);
   formData.append('notes', els.notes.value || '');
+  if (state.styleReference) {
+    formData.append('styleReference', state.styleReference);
+  }
 
   setLoading(true);
   els.previewPlaceholder.classList.add('hidden');

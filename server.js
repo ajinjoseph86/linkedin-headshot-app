@@ -62,7 +62,7 @@ app.use('/generated', express.static(GENERATED_DIR));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 12 * 1024 * 1024, files: 2 },
+  limits: { fileSize: 12 * 1024 * 1024, files: 3 },
 });
 
 // ---------- date / budget helpers (Asia/Singapore) ----------
@@ -192,13 +192,22 @@ const FRAMING = {
   upper_body: 'Frame it from roughly the waist up, subject centred, looking directly at the camera.',
 };
 
-function buildPrompt({ attire, background, framing, notes }) {
+function buildPrompt({ attire, background, framing, notes, hasStyleReference }) {
   let prompt =
     'Turn the reference photo(s) of this person into a polished, professional LinkedIn profile headshot. ' +
     'CRITICAL: keep the exact same person — preserve their facial structure, bone structure, eye shape and colour, ' +
     'nose, mouth, skin tone, ethnicity, gender, apparent age, and any distinctive features such as glasses, ' +
     'facial hair, moles or scars. The result must be instantly recognisable as the same individual. ' +
     'Do not beautify, slim, lighten, or otherwise alter their face.';
+
+  if (hasStyleReference) {
+    prompt +=
+      ' The LAST reference image is a STYLE SAMPLE ONLY, showing a desired headshot look — match its clothing ' +
+      'style, background/setting, lighting mood, and framing. Do NOT use any facial features, identity, body ' +
+      'shape, skin tone, or hair from that style-sample image; the final person must be based entirely on the ' +
+      "other reference photo(s) of the actual subject. If the style sample's clothing or setting conflicts with " +
+      'the options below, follow the style sample.';
+  }
 
   prompt += ` Dress the subject in ${ATTIRE[attire] || ATTIRE.blazer}.`;
   prompt += ` Place them against ${BACKGROUND[background] || BACKGROUND.studio_grey}.`;
@@ -311,13 +320,20 @@ app.get('/api/download/:imageId', async (req, res) => {
   res.download(path.join(GENERATED_DIR, `${imageId}.png`), `linkedin-headshot-${imageId.slice(0, 8)}.png`);
 });
 
-app.post('/api/generate', upload.array('photos', 2), async (req, res) => {
+app.post(
+  '/api/generate',
+  upload.fields([
+    { name: 'photos', maxCount: 2 },
+    { name: 'styleReference', maxCount: 1 },
+  ]),
+  async (req, res) => {
   try {
     if (!FAL_KEY) {
       return res.status(500).json({ error: 'Server is missing FAL_KEY. Add it to your .env file and restart.' });
     }
 
-    const files = req.files || [];
+    const files = req.files?.photos || [];
+    const styleReferenceFile = req.files?.styleReference?.[0] || null;
     if (files.length < 1) {
       return res.status(400).json({ error: 'Upload at least 1 photo of yourself.' });
     }
@@ -361,8 +377,10 @@ app.post('/api/generate', upload.array('photos', 2), async (req, res) => {
     }
 
     // ---- resize + base64-encode photos as data URIs (avoids needing a fal storage upload step) ----
+    // Style reference goes LAST in the array so it lines up with the "LAST reference image" wording in the prompt.
+    const allFiles = styleReferenceFile ? [...files, styleReferenceFile] : files;
     const imageDataUris = await Promise.all(
-      files.map(async (f) => {
+      allFiles.map(async (f) => {
         const resized = await sharp(f.buffer)
           .rotate()
           .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
@@ -372,7 +390,7 @@ app.post('/api/generate', upload.array('photos', 2), async (req, res) => {
       })
     );
 
-    const prompt = buildPrompt({ attire, background, framing, notes });
+    const prompt = buildPrompt({ attire, background, framing, notes, hasStyleReference: !!styleReferenceFile });
 
     const submitted = await falSubmit({
       prompt,
@@ -404,6 +422,7 @@ app.post('/api/generate', upload.array('photos', 2), async (req, res) => {
       background,
       framing,
       notes: notes || null,
+      hasStyleReference: !!styleReferenceFile,
       resultUrl: `/generated/${destFile}`,
       costUsd: estimatedCost,
     };
