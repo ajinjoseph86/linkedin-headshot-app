@@ -1,5 +1,5 @@
 // Change this one line to rebrand the on-screen watermark.
-const WATERMARK_TEXT = 'REPUBLIC POLYTECHNIC';
+const WATERMARK_TEXT = 'MULTIVERSEMATRIX';
 const WATERMARK_TILES = 9;
 
 const state = {
