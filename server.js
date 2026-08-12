@@ -14,23 +14,14 @@ const FAL_KEY = process.env.FAL_KEY;
 const DAILY_BUDGET_USD = parseFloat(process.env.DAILY_BUDGET_USD || '10.00');
 const MAX_GENERATIONS_PER_CLIENT = parseInt(process.env.MAX_GENERATIONS_PER_CLIENT || '5', 10);
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const DOWNLOAD_PRICE_USD = parseFloat(process.env.DOWNLOAD_PRICE_USD || '2.00');
 const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY) : null;
 
-// GPT Image 2 edit, low quality for the free preview ($/image, worst-case for non-square sizes).
+// GPT Image 2 edit, low quality ($/image, worst-case for non-square sizes).
 // See https://fal.ai/models/fal-ai/gpt-image-2/edit
 const COST_PER_IMAGE_USD = 0.013;
 const FAL_MODEL = 'openai/gpt-image-2/edit';
 const IMAGE_QUALITY = process.env.IMAGE_QUALITY || 'low';
-
-// Paid download resolution tiers: price the customer pays, and the fal.ai
-// quality/size used to re-render the saved preview at that resolution.
-// estimatedCostUsd is a conservative (worst-case) fal.ai cost used for the
-// daily budget guard — see https://fal.ai/models/fal-ai/gpt-image-2/edit for pricing.
-const RESOLUTION_TIERS = {
-  '1k': { priceUsd: 2.0, width: 1024, height: 1024, quality: 'medium', estimatedCostUsd: 0.07, label: '1K' },
-  '2k': { priceUsd: 4.0, width: 2048, height: 2048, quality: 'high', estimatedCostUsd: 0.3, label: '2K' },
-  '4k': { priceUsd: 5.0, width: 4096, height: 4096, quality: 'high', estimatedCostUsd: 0.9, label: '4K' },
-};
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const SPEND_FILE = path.join(DATA_DIR, 'spend.json');
@@ -117,19 +108,16 @@ async function appendHistory(entry) {
 
 // ---------- paid downloads ----------
 
-async function findPaidRecord(imageId, tier, clientId) {
+async function isPaid(imageId, clientId) {
   const paid = await readJson(PAID_FILE, []);
-  return paid.find((p) => p.imageId === imageId && p.tier === tier && p.clientId === clientId);
+  return paid.some((p) => p.imageId === imageId && p.clientId === clientId);
 }
 
-async function markPaid({ imageId, tier, clientId, sessionId, resultFile }) {
+async function markPaid({ imageId, clientId, sessionId }) {
   const paid = await readJson(PAID_FILE, []);
-  const existing = paid.find((p) => p.sessionId === sessionId);
-  if (existing) return existing; // already recorded
-  const record = { imageId, tier, clientId, sessionId, resultFile, paidAt: new Date().toISOString() };
-  paid.push(record);
+  if (paid.some((p) => p.sessionId === sessionId)) return; // already recorded
+  paid.push({ imageId, clientId, sessionId, paidAt: new Date().toISOString() });
   await writeJson(PAID_FILE, paid);
-  return record;
 }
 
 // ---------- fal.ai helpers ----------
@@ -179,11 +167,6 @@ async function downloadToFile(url, destPath) {
   if (!res.ok) throw new Error(`failed to download result image (${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   await fsp.writeFile(destPath, buf);
-}
-
-async function fileToDataUri(filePath) {
-  const buf = await fsp.readFile(filePath);
-  return `data:image/png;base64,${buf.toString('base64')}`;
 }
 
 // ---------- prompt building ----------
@@ -267,13 +250,9 @@ app.post('/api/checkout', async (req, res) => {
     return res.status(500).json({ error: 'Server is missing STRIPE_SECRET_KEY. Add it to .env and restart.' });
   }
 
-  const { imageId, tier } = req.body;
-  if (!imageId || !tier) {
-    return res.status(400).json({ error: 'imageId and tier are required.' });
-  }
-  const tierConfig = RESOLUTION_TIERS[tier];
-  if (!tierConfig) {
-    return res.status(400).json({ error: 'Unknown resolution tier.' });
+  const { imageId } = req.body;
+  if (!imageId) {
+    return res.status(400).json({ error: 'imageId is required.' });
   }
 
   const history = await readJson(HISTORY_FILE, []);
@@ -282,7 +261,7 @@ app.post('/api/checkout', async (req, res) => {
     return res.status(404).json({ error: 'Image not found for this session.' });
   }
 
-  if (await findPaidRecord(imageId, tier, req.clientId)) {
+  if (await isPaid(imageId, req.clientId)) {
     return res.json({ alreadyPaid: true });
   }
 
@@ -293,14 +272,14 @@ app.post('/api/checkout', async (req, res) => {
       {
         price_data: {
           currency: 'usd',
-          unit_amount: Math.round(tierConfig.priceUsd * 100),
-          product_data: { name: `LinkedIn Headshot — ${tierConfig.label} Download` },
+          unit_amount: Math.round(DOWNLOAD_PRICE_USD * 100),
+          product_data: { name: 'LinkedIn Headshot — HD Download' },
         },
         quantity: 1,
       },
     ],
-    metadata: { imageId, tier, clientId: req.clientId },
-    success_url: `${origin}/?paid_image=${imageId}&tier=${tier}&session_id={CHECKOUT_SESSION_ID}`,
+    metadata: { imageId, clientId: req.clientId },
+    success_url: `${origin}/?paid_image=${imageId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/`,
   });
 
@@ -324,76 +303,21 @@ app.get('/api/verify-payment', async (req, res) => {
     return res.status(403).json({ error: 'Session does not belong to this browser.' });
   }
 
-  const { imageId, tier } = session.metadata;
-  const tierConfig = RESOLUTION_TIERS[tier];
-  if (!tierConfig) {
-    return res.status(400).json({ error: 'Unknown resolution tier on this session.' });
-  }
-
-  const existing = await findPaidRecord(imageId, tier, req.clientId);
-  if (existing?.resultFile) {
-    return res.json({ paid: true, imageId, tier });
-  }
-
-  try {
-    const history = await readJson(HISTORY_FILE, []);
-    const entry = history.find((h) => h.id === imageId && h.clientId === req.clientId);
-    if (!entry) {
-      return res.status(404).json({ error: 'Original image not found.' });
-    }
-
-    const spentToday = await getTodaySpend();
-    if (spentToday + tierConfig.estimatedCostUsd > DAILY_BUDGET_USD) {
-      return res.status(429).json({
-        error: `Daily budget of $${DAILY_BUDGET_USD.toFixed(2)} reached, can't render this download right now. ` +
-          `Your payment was still successful — contact support for a manual delivery.`,
-      });
-    }
-
-    const sourceDataUri = await fileToDataUri(path.join(GENERATED_DIR, `${imageId}.png`));
-
-    const submitted = await falSubmit({
-      prompt:
-        'This is a resolution upscale request. Reproduce this exact image with no changes to content, ' +
-        'composition, subject, colours, or style — only render it at the higher target resolution with ' +
-        'crisp, enhanced detail and clarity.',
-      image_urls: [sourceDataUri],
-      num_images: 1,
-      image_size: { width: tierConfig.width, height: tierConfig.height },
-      quality: tierConfig.quality,
-      output_format: 'png',
-    });
-
-    const result = await falPollResult(submitted.status_url, submitted.response_url);
-    const outputImage = result?.images?.[0];
-    if (!outputImage?.url) {
-      throw new Error('fal.ai response did not include an output image.');
-    }
-
-    const resultFile = `${imageId}-${tier}.png`;
-    await downloadToFile(outputImage.url, path.join(GENERATED_DIR, resultFile));
-    await addSpend(tierConfig.estimatedCostUsd);
-    await markPaid({ imageId, tier, clientId: req.clientId, sessionId, resultFile });
-
-    res.json({ paid: true, imageId, tier });
-  } catch (err) {
-    console.error('verify-payment render error:', err);
-    res.status(500).json({
-      error: 'Payment succeeded but rendering the download failed. Contact support for a manual delivery.',
-    });
-  }
+  await markPaid({ imageId: session.metadata.imageId, clientId: req.clientId, sessionId });
+  res.json({ paid: true, imageId: session.metadata.imageId });
 });
 
-app.get('/api/download/:imageId/:tier', async (req, res) => {
-  const { imageId, tier } = req.params;
-  const record = await findPaidRecord(imageId, tier, req.clientId);
-  if (!record || !record.resultFile) {
+app.get('/api/download/:imageId', async (req, res) => {
+  const { imageId } = req.params;
+  const history = await readJson(HISTORY_FILE, []);
+  const entry = history.find((h) => h.id === imageId && h.clientId === req.clientId);
+  if (!entry) {
+    return res.status(404).json({ error: 'Image not found.' });
+  }
+  if (!(await isPaid(imageId, req.clientId))) {
     return res.status(402).json({ error: 'Payment required.' });
   }
-  res.download(
-    path.join(GENERATED_DIR, record.resultFile),
-    `linkedin-headshot-${imageId.slice(0, 8)}-${tier}.png`
-  );
+  res.download(path.join(GENERATED_DIR, `${imageId}.png`), `linkedin-headshot-${imageId.slice(0, 8)}.png`);
 });
 
 app.post(
