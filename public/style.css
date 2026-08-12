@@ -59,15 +59,7 @@ body {
 }
 
 .budget {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--text-dim);
+  display: none; /* internal spend tracking only — not shown to visitors */
 }
 
 .budget .dot {
