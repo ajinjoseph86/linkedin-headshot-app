@@ -1,6 +1,6 @@
 // Change this one line to rebrand the on-screen watermark.
 const WATERMARK_TEXT = 'MULTIVERSEMATRIX';
-const WATERMARK_TILES = 9;
+const WATERMARK_TILES = 220;
 
 const state = {
   photos: [null, null], // File objects
