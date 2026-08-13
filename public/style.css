@@ -328,37 +328,6 @@ body {
   object-fit: contain;
 }
 
-/* Tiles at a fixed size and repeats via flex-wrap over an oversized (220%),
-   rotated box, so density stays constant no matter the container's aspect
-   ratio (portrait, square, or landscape) — no more sparse coverage on
-   wide/landscape previews. */
-.watermark-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 220%;
-  height: 220%;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  overflow: hidden;
-  pointer-events: none;
-  transform: translate(-50%, -50%) rotate(-30deg);
-}
-
-.watermark-overlay span {
-  flex: 0 0 auto;
-  width: 170px;
-  padding: 26px 14px;
-  color: rgba(255, 255, 255, 0.4);
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
 .preview-loading {
   position: absolute;
   inset: 0;
@@ -420,13 +389,6 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.gallery-watermark span {
-  width: 70px;
-  padding: 10px 6px;
-  font-size: 9px;
-  letter-spacing: 0.3px;
 }
 
 .gallery-item .tag {

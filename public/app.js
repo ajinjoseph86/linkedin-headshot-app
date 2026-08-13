@@ -1,7 +1,3 @@
-// Change this one line to rebrand the on-screen watermark.
-const WATERMARK_TEXT = 'MULTIVERSEMATRIX';
-const WATERMARK_TILES = 220;
-
 const state = {
   photos: [null, null], // File objects
   styleReference: null, // File object
@@ -21,21 +17,12 @@ const els = {
   errorText: document.getElementById('error-text'),
   previewPlaceholder: document.getElementById('preview-placeholder'),
   previewImage: document.getElementById('preview-image'),
-  watermarkOverlay: document.getElementById('watermark-overlay'),
   previewLoading: document.getElementById('preview-loading'),
   downloadBtn: document.getElementById('download-btn'),
   gallery: document.getElementById('gallery'),
   budgetPill: document.getElementById('budget-pill'),
   budgetText: document.getElementById('budget-text'),
 };
-
-// ---------- watermark ----------
-
-function watermarkMarkup() {
-  return `<span>${WATERMARK_TEXT}</span>`.repeat(WATERMARK_TILES);
-}
-
-els.watermarkOverlay.innerHTML = watermarkMarkup();
 
 // ---------- photo slots ----------
 
@@ -153,7 +140,6 @@ function renderGallery(history) {
     item.className = 'gallery-item';
     item.innerHTML = `
       <img src="${entry.resultUrl}" alt="LinkedIn headshot" />
-      <div class="watermark-overlay gallery-watermark">${watermarkMarkup()}</div>
       <button class="gallery-download" data-image-id="${entry.id}" title="Pay $2.00 to download highres image">&#8681;</button>
     `;
     els.gallery.appendChild(item);
@@ -196,7 +182,6 @@ async function restorePaidPreview(imageId) {
     els.previewPlaceholder.classList.add('hidden');
     els.previewImage.src = entry.resultUrl;
     els.previewImage.classList.remove('hidden');
-    els.watermarkOverlay.classList.remove('hidden');
     els.downloadBtn.classList.remove('hidden');
     state.currentImageId = entry.id;
   } catch (err) {
@@ -297,7 +282,6 @@ els.generateBtn.addEventListener('click', async () => {
 
     els.previewImage.src = `${data.resultUrl}?t=${Date.now()}`;
     els.previewImage.classList.remove('hidden');
-    els.watermarkOverlay.classList.remove('hidden');
     state.currentImageId = data.id;
     els.downloadBtn.classList.remove('hidden');
     els.budgetText.textContent = `$${data.remainingTodayUsd.toFixed(2)} left of today's budget`;
@@ -308,7 +292,6 @@ els.generateBtn.addEventListener('click', async () => {
     showError(err.message || 'Something went wrong.');
     if (els.previewImage.classList.contains('hidden')) {
       els.previewPlaceholder.classList.remove('hidden');
-      els.watermarkOverlay.classList.add('hidden');
     }
   } finally {
     setLoading(false);

@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FAL_KEY = process.env.FAL_KEY;
 const DAILY_BUDGET_USD = parseFloat(process.env.DAILY_BUDGET_USD || '10.00');
-const MAX_GENERATIONS_PER_CLIENT = parseInt(process.env.MAX_GENERATIONS_PER_CLIENT || '5', 10);
+const MAX_GENERATIONS_PER_CLIENT = parseInt(process.env.MAX_GENERATIONS_PER_CLIENT || '8', 10);
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const DOWNLOAD_PRICE_USD = parseFloat(process.env.DOWNLOAD_PRICE_USD || '2.00');
 const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY) : null;
@@ -28,8 +28,10 @@ const SPEND_FILE = path.join(DATA_DIR, 'spend.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const PAID_FILE = path.join(DATA_DIR, 'paid.json');
 const GENERATED_DIR = process.env.GENERATED_DIR || path.join(__dirname, 'public', 'generated');
+const PRIVATE_DIR = process.env.PRIVATE_DIR || path.join(DATA_DIR, 'private');
+const WATERMARK_TEXT = 'MULTIVERSEMATRIX.NET';
 
-for (const dir of [DATA_DIR, GENERATED_DIR]) {
+for (const dir of [DATA_DIR, GENERATED_DIR, PRIVATE_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -162,11 +164,69 @@ async function falPollResult(statusUrl, responseUrl, { timeoutMs = 90000, interv
   throw new Error('fal generation timed out');
 }
 
-async function downloadToFile(url, destPath) {
+async function downloadToBuffer(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`failed to download result image (${res.status})`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  await fsp.writeFile(destPath, buf);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+function watermarkSvg(width, height, text) {
+  return Buffer.from(`
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="wm" width="240" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+          <text x="0" y="70" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="900"
+                fill="rgba(255,255,255,0.42)" stroke="rgba(0,0,0,0.4)" stroke-width="1.5">${text}</text>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#wm)" />
+    </svg>
+  `);
+}
+
+async function saveOriginalAndPreview(buffer, id) {
+  const originalFile = `${id}.png`;
+  await fsp.writeFile(path.join(PRIVATE_DIR, originalFile), buffer);
+
+  const image = sharp(buffer);
+  const meta = await image.metadata();
+  const width = meta.width || 1024;
+  const height = meta.height || 1024;
+
+  const previewFile = `${id}-preview.jpg`;
+  await sharp(buffer)
+    .composite([{ input: watermarkSvg(width, height, WATERMARK_TEXT), tile: false }])
+    .jpeg({ quality: 88 })
+    .toFile(path.join(GENERATED_DIR, previewFile));
+
+  return { originalFile, previewFile };
+}
+
+async function migrateLegacyImages() {
+  try {
+    const history = await readJson(HISTORY_FILE, []);
+    let changed = false;
+    for (const entry of history) {
+      if (!entry.resultUrl || !entry.resultUrl.startsWith('/generated/')) continue;
+      const fileName = entry.resultUrl.replace('/generated/', '');
+      if (fileName.endsWith('-preview.jpg')) continue; // already migrated
+
+      const legacyPath = path.join(GENERATED_DIR, fileName);
+      if (!fs.existsSync(legacyPath)) continue;
+
+      const buffer = await fsp.readFile(legacyPath);
+      const { previewFile } = await saveOriginalAndPreview(buffer, entry.id);
+      await fsp.unlink(legacyPath).catch(() => {});
+      entry.resultUrl = `/generated/${previewFile}`;
+      changed = true;
+      console.log(`migrated legacy image ${fileName} -> ${previewFile}`);
+    }
+    if (changed) {
+      await writeJson(HISTORY_FILE, history);
+    }
+  } catch (err) {
+    console.error('migrateLegacyImages error:', err);
+  }
 }
 
 // ---------- prompt building ----------
@@ -317,7 +377,7 @@ app.get('/api/download/:imageId', async (req, res) => {
   if (!(await isPaid(imageId, req.clientId))) {
     return res.status(402).json({ error: 'Payment required.' });
   }
-  res.download(path.join(GENERATED_DIR, `${imageId}.png`), `linkedin-headshot-${imageId.slice(0, 8)}.png`);
+  res.download(path.join(PRIVATE_DIR, `${imageId}.png`), `linkedin-headshot-${imageId.slice(0, 8)}.png`);
 });
 
 app.post(
@@ -409,8 +469,8 @@ app.post(
     }
 
     const id = uuidv4();
-    const destFile = `${id}.png`;
-    await downloadToFile(outputImage.url, path.join(GENERATED_DIR, destFile));
+    const resultBuffer = await downloadToBuffer(outputImage.url);
+    const { previewFile } = await saveOriginalAndPreview(resultBuffer, id);
 
     const newTotal = await addSpend(estimatedCost);
 
@@ -423,7 +483,7 @@ app.post(
       framing,
       notes: notes || null,
       hasStyleReference: !!styleReferenceFile,
-      resultUrl: `/generated/${destFile}`,
+      resultUrl: `/generated/${previewFile}`,
       costUsd: estimatedCost,
     };
     await appendHistory(entry);
@@ -447,4 +507,5 @@ app.listen(PORT, () => {
   if (!FAL_KEY) {
     console.warn('WARNING: FAL_KEY is not set. Copy .env.example to .env and add your fal.ai API key.');
   }
+  migrateLegacyImages();
 });
