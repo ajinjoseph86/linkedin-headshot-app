@@ -41,9 +41,9 @@ if not defined NODE_EXE (
 echo Using Node from: %NODE_EXE%
 
 if not exist ".env" (
-  echo Creating .env with your fal.ai key...
+  echo Creating .env template — edit it to add your real fal.ai key before using the app...
   (
-    echo FAL_KEY=8c3d7179-5121-4cc9-9033-a481a83f585e:bd9b9ea3f1be2ac3176db2064ad14002
+    echo FAL_KEY=paste_your_fal_ai_key_here
     echo PORT=3000
     echo DAILY_BUDGET_USD=10.00
   ) > ".env"
